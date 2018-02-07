@@ -147,7 +147,7 @@ void ppu_vt03_device::init_palette(palette_device &palette, int first_entry)
 {
 	// todo, work out the format of the 12 palette bits instead of just calling the main init
 	m_palette = &palette;
-	ppu2c0x_device::init_palette(palette, first_entry, true);
+	ppu2c0x_device::init_palette(palette, first_entry);
 }
 
 void ppu_vt03_device::device_start()
