@@ -386,10 +386,7 @@ void ppu_vt03_device::set_2010_reg(uint8_t data)
 		}
 		else
 		{
-			for (int i = 0;i < 256;i++)
-			{
-				m_palette->set_pen_indirect(i, i);
-			}
+			ppu2c0x_device::init_palette(*m_palette, 0, false);
 		}
 	}
 
