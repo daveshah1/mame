@@ -74,6 +74,7 @@
 #include "machine/bankdev.h"
 #include "video/ppu2c0x_vt.h"
 #include "machine/m6502_vtscr.h"
+#include "sound/nes_vt_apu.h"
 #include "screen.h"
 #include "speaker.h"
 
@@ -228,7 +229,7 @@ private:
 	virtual void machine_reset() override;
 
 	required_device<ppu_vt03_device> m_ppu;
-	required_device<nesapu_device> m_apu;
+	required_device<nesapu_vt_device> m_apu;
 	required_device<address_map_bank_device> m_prg;
 	required_memory_bank m_prgbank0;
 	required_memory_bank m_prgbank1;
@@ -1159,7 +1160,7 @@ void nes_vt_state::nes_vt_map(address_map &map)
 	map(0x0000, 0x07ff).ram();
 	map(0x2000, 0x3fff).mask(0x001F).rw(m_ppu, FUNC(ppu2c0x_device::read), FUNC(ppu2c0x_device::write));        /* PPU registers */
 
-	map(0x4000, 0x4013).rw(m_apu, FUNC(nesapu_device::read), FUNC(nesapu_device::write));
+	map(0x4000, 0x4013).rw(m_apu, FUNC(nesapu_vt_device::read), FUNC(nesapu_vt_device::write));
 	map(0x4014, 0x4014).r(FUNC(nes_vt_state::psg1_4014_r)).w(FUNC(nes_vt_state::nes_vh_sprite_dma_w));
 	map(0x4015, 0x4015).rw(FUNC(nes_vt_state::psg1_4015_r), FUNC(nes_vt_state::psg1_4015_w)); /* PSG status / first control register */
 	map(0x4016, 0x4016).rw(FUNC(nes_vt_state::nes_in0_r), FUNC(nes_vt_state::nes_in0_w));
@@ -1227,7 +1228,7 @@ void nes_vt_state::nes_vt_hh_map(address_map &map)
 	map(0x0000, 0x1fff).mask(0x0fff).ram();
 	map(0x2000, 0x3fff).rw(m_ppu, FUNC(ppu2c0x_device::read), FUNC(ppu2c0x_device::write));        /* PPU registers */
 
-	map(0x4000, 0x4013).rw(m_apu, FUNC(nesapu_device::read), FUNC(nesapu_device::write));
+	map(0x4000, 0x4013).rw(m_apu, FUNC(nesapu_vt_device::read), FUNC(nesapu_vt_device::write));
 	map(0x4015, 0x4015).rw(FUNC(nes_vt_state::psg1_4015_r), FUNC(nes_vt_state::psg1_4015_w)); /* PSG status / first control register */
 	map(0x4016, 0x4016).rw(FUNC(nes_vt_state::nes_in0_r), FUNC(nes_vt_state::nes_in0_w));
 	map(0x4017, 0x4017).r(FUNC(nes_vt_state::nes_in1_r)).w(FUNC(nes_vt_state::psg1_4017_w));
@@ -1251,7 +1252,7 @@ void nes_vt_state::nes_vt_dg_map(address_map &map)
 	map(0x0000, 0x1fff).ram();
 	map(0x2000, 0x3fff).rw(m_ppu, FUNC(ppu2c0x_device::read), FUNC(ppu2c0x_device::write));        /* PPU registers */
 
-	map(0x4000, 0x4013).rw(m_apu, FUNC(nesapu_device::read), FUNC(nesapu_device::write));
+	map(0x4000, 0x4030).rw(m_apu, FUNC(nesapu_vt_device::read), FUNC(nesapu_vt_device::write));
 	map(0x4015, 0x4015).rw(FUNC(nes_vt_state::psg1_4015_r), FUNC(nes_vt_state::psg1_4015_w)); /* PSG status / first control register */
 	map(0x4016, 0x4016).rw(FUNC(nes_vt_state::nes_in0_r), FUNC(nes_vt_state::nes_in0_w));
 	map(0x4017, 0x4017).r(FUNC(nes_vt_state::nes_in1_r)).w(FUNC(nes_vt_state::psg1_4017_w));
@@ -1381,7 +1382,7 @@ MACHINE_CONFIG_START(nes_vt_state::nes_vt)
 	   than just using 2 APUs as registers in the 2nd one affect the PCM channel mode but the
 	   DMA control still comes from the 1st, but in the new mode, sound always outputs via the
 	   2nd.  Probably need to split the APU into interface and sound gen logic. */
-	MCFG_DEVICE_ADD("apu", NES_APU, NTSC_APU_CLOCK)
+	MCFG_DEVICE_ADD("apu", NES_VT_APU, NTSC_APU_CLOCK)
 	MCFG_NES_APU_IRQ_HANDLER(WRITELINE(*this, nes_vt_state, apu_irq))
 	MCFG_NES_APU_MEM_READ_CALLBACK(READ8(*this, nes_vt_state, apu_read_mem))
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
