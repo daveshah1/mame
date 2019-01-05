@@ -123,6 +123,7 @@ private:
 	/* APU handling */
 	DECLARE_WRITE_LINE_MEMBER(apu_irq);
 	DECLARE_READ8_MEMBER(apu_read_mem);
+	DECLARE_READ8_MEMBER(apu_read_rom);
 	DECLARE_READ8_MEMBER(psg1_4014_r);
 	DECLARE_READ8_MEMBER(psg1_4015_r);
 	DECLARE_WRITE8_MEMBER(psg1_4015_w);
@@ -1309,6 +1310,11 @@ READ8_MEMBER(nes_vt_state::apu_read_mem)
 	return m_maincpu->space(AS_PROGRAM).read_byte(offset);
 }
 
+READ8_MEMBER(nes_vt_state::apu_read_rom)
+{
+	return m_prgrom[offset & (m_romsize - 1)];
+}
+
 /* not strictly needed, but helps us see where things are in ROM to aid with figuring out banking schemes*/
 static const gfx_layout helper_layout =
 {
@@ -1385,6 +1391,7 @@ MACHINE_CONFIG_START(nes_vt_state::nes_vt)
 	MCFG_DEVICE_ADD("apu", NES_VT_APU, NTSC_APU_CLOCK)
 	MCFG_NES_APU_IRQ_HANDLER(WRITELINE(*this, nes_vt_state, apu_irq))
 	MCFG_NES_APU_MEM_READ_CALLBACK(READ8(*this, nes_vt_state, apu_read_mem))
+	MCFG_NES_VT_APU_ROM_READ_CALLBACK(READ8(*this, nes_vt_state, apu_read_rom))
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
