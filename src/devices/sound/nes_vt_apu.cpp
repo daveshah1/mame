@@ -25,16 +25,17 @@ nesapu_vt_device::nesapu_vt_device(const machine_config &mconfig, const char *ta
 
 void nesapu_vt_device::device_start()
 {
-	nesapu_device::device_start();
+	apu_init();
+
 	if(!m_xop2->started())
 		throw device_missing_dependencies();
 	for (int i = 0; i < 2; i++)
 	{
-		save_item(NAME(m_apu_vt.vt33_pcm[i].regs));
-		save_item(NAME(m_apu_vt.vt33_pcm[i].address));
-		save_item(NAME(m_apu_vt.vt33_pcm[i].volume));
-		save_item(NAME(m_apu_vt.vt33_pcm[i].enabled));
-		save_item(NAME(m_apu_vt.vt33_pcm[i].playing));
+		save_item(NAME(m_apu_vt.vt33_pcm[i].regs), i);
+		save_item(NAME(m_apu_vt.vt33_pcm[i].address), i);
+		save_item(NAME(m_apu_vt.vt33_pcm[i].volume), i);
+		save_item(NAME(m_apu_vt.vt33_pcm[i].enabled), i);
+		save_item(NAME(m_apu_vt.vt33_pcm[i].playing), i);
 	}
 
 	save_item(NAME(m_apu_vt.vt03_pcm.regs));

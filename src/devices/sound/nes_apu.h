@@ -70,6 +70,7 @@ protected:
 	// sound stream update overrides
 	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples) override;
 
+	void apu_init();
 	void calculate_rates();
 	void create_syncs(unsigned long sps);
 	s8 apu_square(apu_t::square_t *chan);

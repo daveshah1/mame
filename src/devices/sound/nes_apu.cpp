@@ -170,14 +170,7 @@ void nesapu_device::calculate_rates()
 
 void nesapu_device::device_start()
 {
-	// resolve callbacks
-	m_irq_handler.resolve_safe();
-	m_mem_read_cb.resolve_safe(0x00);
-
-	create_noise(m_noise_lut, 13, apu_t::NOISE_LONG);
-
-	calculate_rates();
-
+	apu_init();
 	/* register for save */
 	for (int i = 0; i < 2; i++)
 	{
@@ -234,6 +227,18 @@ void nesapu_device::device_start()
 	save_item(NAME(m_APU.step_mode));
 	#endif
 }
+
+void nesapu_device::apu_init()
+{
+	// resolve callbacks
+	m_irq_handler.resolve_safe();
+	m_mem_read_cb.resolve_safe(0x00);
+
+	create_noise(m_noise_lut, 13, apu_t::NOISE_LONG);
+
+	calculate_rates();
+}
+
 
 /* TODO: sound channels should *ALL* have DC volume decay */
 
