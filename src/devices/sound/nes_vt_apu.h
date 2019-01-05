@@ -56,8 +56,8 @@ struct apu_vt_t {
 
 		uint8_t regs[4];
 		uint32_t address = 0;
-		uint32_t length = 0;
-		float output_vol = 0.0;
+        uint32_t length = 0;
+		uint32_t remaining_bytes = 0;
 		bool enabled = false;
 		signed char vol = 0;
 	};
@@ -70,10 +70,10 @@ struct apu_vt_t {
 				elem = 0;
 		}
 
-		uint8_t regs[4];
 		uint32_t address = 0;
 		uint8_t volume = 0;
 		bool enabled = false, playing = false;
+		uint8_t regs[4];
 	};
 
 	uint8_t extra_regs[7]; //4030 .. 4037
@@ -103,6 +103,7 @@ class nesapu_vt_device : public nesapu_device
 {
 public:
 	nesapu_vt_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock);
+	virtual void device_add_mconfig(machine_config &config) override;
 
 	template <class Object> devcb_base &set_rom_read_callback(device_t &device, Object &&cb) { return m_rom_read_cb.set_callback(std::forward<Object>(cb)); }
 
@@ -126,12 +127,14 @@ protected:
 
 	s8 vt03_pcm(apu_vt_t::vt03_pcm_t *ch);
 	s8 vt3x_pcm(apu_vt_t::vt3x_pcm_t *ch);
-
+    void reset_vt03_pcm(apu_vt_t::vt03_pcm_t *ch);
+    void start_vt3x_pcm(apu_vt_t::vt3x_pcm_t *ch);
 private:
 	devcb_read8 m_rom_read_cb;
 
 };
 
 DECLARE_DEVICE_TYPE(NES_VT_APU, nesapu_vt_device)
+DECLARE_DEVICE_TYPE(NES_VT_APU_SLAVE, nesapu_vt_slave_device)
 
 #endif // MAME_SOUND_NES_VT_APU_H

@@ -9,13 +9,16 @@
 #include "nes_vt_apu.h"
 #include "emu.h"
 
+#define VTXX_NTSC_XTAL XTAL(21'477'272)
+#define VTXX_NTSC_APU_CLOCK (VTXX_NTSC_XTAL/12)
+
 DEFINE_DEVICE_TYPE(NES_VT_APU, nesapu_vt_device, "nesapu_vt", "VTxx APU")
 DEFINE_DEVICE_TYPE(NES_VT_APU_SLAVE, nesapu_vt_slave_device, "nesapu_vt_slave", "VTxx APU (slave)")
 
 nesapu_vt_device::nesapu_vt_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock)
 	: nesapu_device(mconfig, tag, NES_VT_APU, owner, clock),
 	  m_xop2(*this, "nesapu_vt_slave"),
-		m_rom_read_cb(*this)
+	  m_rom_read_cb(*this)
 {
 
 }
@@ -37,7 +40,7 @@ void nesapu_vt_device::device_start()
 	save_item(NAME(m_apu_vt.vt03_pcm.regs));
 	save_item(NAME(m_apu_vt.vt03_pcm.address));
 	save_item(NAME(m_apu_vt.vt03_pcm.length));
-	save_item(NAME(m_apu_vt.vt03_pcm.output_vol));
+    save_item(NAME(m_apu_vt.vt03_pcm.remaining_bytes));
 	save_item(NAME(m_apu_vt.vt03_pcm.enabled));
 	save_item(NAME(m_apu_vt.vt03_pcm.vol));
 
@@ -94,23 +97,98 @@ void nesapu_vt_device::sound_stream_update(sound_stream &stream, stream_sample_t
 	}
 }
 
+s8 nesapu_vt_device::vt03_pcm(apu_vt_t::vt03_pcm_t *ch) {
+    if (ch->enabled) {
+        s8 data = s8(m_mem_read_cb(ch->address));
+        ch->address++;
+        ch->remaining_bytes--;
+        if (ch->remaining_bytes == 0) {
+            if (ch->regs[0] & 0x40) {
+                reset_vt03_pcm(ch);
+            } else {
+                ch->enabled = false;
+            }
+        }
+        return data;
+    } else {
+        return 0;
+    }
+}
+
+s8 nesapu_vt_device::vt3x_pcm(apu_vt_t::vt3x_pcm_t *ch) {
+	if (ch->enabled && ch->playing) {
+		uint8_t sample = m_rom_read_cb(ch->address);
+		if (sample == 0xFF) {
+			ch->playing = false;
+		} else {
+			ch->address++;
+			return s8(s8(sample) * s16(ch->volume) / 255);
+		}
+	}
+	return 0;
+}
+
+void nesapu_vt_device::start_vt3x_pcm(apu_vt_t::vt3x_pcm_t *ch) {
+	ch->enabled = true;
+	ch->playing = true;
+	ch->address = (uint32_t(ch->regs[3] & 0x0F) << 21) | (uint32_t(ch->regs[2] & 0x7F) << 14) || (uint32_t(ch->regs[1]) << 6);
+}
+
+
+void nesapu_vt_device::reset_vt03_pcm(apu_vt_t::vt03_pcm_t *ch) {
+    ch->address = ((~m_apu_vt.extra_regs[0]) & 0x03) << 14 | m_apu_vt.vt03_pcm.regs[2] << 6;
+    ch->remaining_bytes = m_apu_vt.vt03_pcm.regs[3] << 4;
+    ch->length = m_apu_vt.vt03_pcm.regs[3] << 4;
+    ch->enabled = true;
+}
+
 void nesapu_vt_device::vt_apu_write(uint8_t address, uint8_t data) {
 
 	if(address == 0x35 && !m_apu_vt.use_vt3x_pcm)
 	{
 		//When VT3x PCM disabled, 4035 controls XOP2
 		m_xop2->write(0x15, data & 0x0F);
+        m_apu_vt.extra_regs[0x05] = data;
+    } else if (address >= 0x10 && address <= 0x13) {
+        nesapu_device::write(0x15, data);
+        m_apu_vt.vt03_pcm.regs[address - 0x10] = data;
+		if (m_apu_vt.use_vt3x_pcm && address == 0x12) {
+			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[1] = data;
+		}
 	} else if(address >= 0x30 && address <= 0x36) {
+        if (address == 0x30) {
+            m_apu_vt.use_vt03_pcm = (data & 0x10) != 0;
+		} else if (address == 0x33) {
+			m_apu_vt.extra_regs[0x33] = data;
+			m_apu_vt.use_vt3x_pcm = (data & 0x80);
+			m_apu_vt.vt33_pcm[0].enabled = (data & 0x10);
+			m_apu_vt.vt33_pcm[1].enabled = (data & 0x08);
+		} else if (address == 0x31) {
+			m_apu_vt.vt3x_sel_channel = 0;
+			m_apu_vt.vt33_pcm[0].volume = data;
+			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[0] = data;
+		} else if (address == 0x32) {
+			m_apu_vt.vt3x_sel_channel = 1;
+			m_apu_vt.vt33_pcm[1].volume = data;
+			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[0] = data;
+		} else if (address == 0x35) {
+			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[2] = data;
+		} else if (address == 0x36) {
+			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[3] = data;
+			start_vt3x_pcm(&(m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel]));
+		}
+
 		m_apu_vt.extra_regs[address - 0x30] = data;
 	} else if (address == 0x15) {
 		uint8_t nes_val = data;
 		if(m_apu_vt.use_vt03_pcm || m_apu_vt.use_vt3x_pcm)
 		{
+            if (nes_val & 0x10 && m_apu_vt.use_vt03_pcm)
+                reset_vt03_pcm(&m_apu_vt.vt03_pcm);
 			nes_val &= 0x0F;
 		}
 		nesapu_device::write(0x15, nes_val);
 	}
-	vt_apu_regwrite(address, data);
 }
 
 uint8_t nesapu_vt_device::vt_apu_read(uint8_t address) {
@@ -171,3 +249,7 @@ void nesapu_vt_device::write(offs_t address, u8 value)
 		logerror("nesapu_vt write %04x %02x\n", 0x4000 + address, value);
 	}
 }
+
+MACHINE_CONFIG_START(nesapu_vt_device::device_add_mconfig)
+	MCFG_DEVICE_ADD("nesapu_vt_slave", NES_VT_APU_SLAVE, VTXX_NTSC_APU_CLOCK)
+MACHINE_CONFIG_END

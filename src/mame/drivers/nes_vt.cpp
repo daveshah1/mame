@@ -1252,7 +1252,7 @@ void nes_vt_state::nes_vt_dg_map(address_map &map)
 	map(0x0000, 0x1fff).ram();
 	map(0x2000, 0x3fff).rw(m_ppu, FUNC(ppu2c0x_device::read), FUNC(ppu2c0x_device::write));        /* PPU registers */
 
-	map(0x4000, 0x4030).rw(m_apu, FUNC(nesapu_vt_device::read), FUNC(nesapu_vt_device::write));
+	map(0x4000, 0x4036).rw(m_apu, FUNC(nesapu_vt_device::read), FUNC(nesapu_vt_device::write));
 	map(0x4015, 0x4015).rw(FUNC(nes_vt_state::psg1_4015_r), FUNC(nes_vt_state::psg1_4015_w)); /* PSG status / first control register */
 	map(0x4016, 0x4016).rw(FUNC(nes_vt_state::nes_in0_r), FUNC(nes_vt_state::nes_in0_w));
 	map(0x4017, 0x4017).r(FUNC(nes_vt_state::nes_in1_r)).w(FUNC(nes_vt_state::psg1_4017_w));

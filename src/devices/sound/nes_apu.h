@@ -81,6 +81,8 @@ protected:
 	inline u8 apu_read(int address);
 	inline void apu_write(int address, u8 value);
 
+	devcb_read8 m_mem_read_cb;
+
 private:
 	/* GLOBAL CONSTANTS */
 	static constexpr unsigned  SYNCS_MAX1     = 0x20;
@@ -96,7 +98,6 @@ private:
 	u32     m_sync_times2[SYNCS_MAX2]; /* Samples per sync table */
 	sound_stream *m_stream;
 	devcb_write_line m_irq_handler;
-	devcb_read8 m_mem_read_cb;
 
 };
 
