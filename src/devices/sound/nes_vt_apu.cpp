@@ -192,8 +192,13 @@ void nesapu_vt_device::vt_apu_write(uint8_t address, uint8_t data) {
 		uint8_t nes_val = data;
 		if(m_apu_vt.use_vt03_pcm || m_apu_vt.use_vt3x_pcm)
 		{
-            if (nes_val & 0x10 && m_apu_vt.use_vt03_pcm)
-                reset_vt03_pcm(&m_apu_vt.vt03_pcm);
+            if (m_apu_vt.use_vt03_pcm) {
+            	if (nes_val & 0x10)
+                	reset_vt03_pcm(&m_apu_vt.vt03_pcm);
+                else
+                	m_apu_vt.vt03_pcm.enabled = false;
+            }
+
 			nes_val &= 0x0F;
 		}
 		nesapu_device::write(0x15, nes_val);
