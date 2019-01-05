@@ -54,12 +54,13 @@ struct apu_vt_t {
 				elem = 0;
 		}
 
+		float phaseacc = 0.0;
 		uint8_t regs[4];
 		uint32_t address = 0;
         uint32_t length = 0;
 		uint32_t remaining_bytes = 0;
 		bool enabled = false;
-		signed char vol = 0;
+		uint8_t vol = 0;
 	};
 
 	struct vt3x_pcm_t

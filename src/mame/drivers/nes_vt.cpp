@@ -1306,7 +1306,7 @@ WRITE_LINE_MEMBER(nes_vt_state::apu_irq)
 
 READ8_MEMBER(nes_vt_state::apu_read_mem)
 {
-	return 0x00;//mintf->program->read_byte(offset);
+	return m_maincpu->space(AS_PROGRAM).read_byte(offset);
 }
 
 /* not strictly needed, but helps us see where things are in ROM to aid with figuring out banking schemes*/

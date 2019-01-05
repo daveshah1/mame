@@ -38,6 +38,7 @@ void nesapu_vt_device::device_start()
 		save_item(NAME(m_apu_vt.vt33_pcm[i].playing), i);
 	}
 
+	save_item(NAME(m_apu_vt.vt03_pcm.phaseacc));
 	save_item(NAME(m_apu_vt.vt03_pcm.regs));
 	save_item(NAME(m_apu_vt.vt03_pcm.address));
 	save_item(NAME(m_apu_vt.vt03_pcm.length));
@@ -100,17 +101,25 @@ void nesapu_vt_device::sound_stream_update(sound_stream &stream, stream_sample_t
 
 s8 nesapu_vt_device::vt03_pcm(apu_vt_t::vt03_pcm_t *ch) {
     if (ch->enabled) {
-        s8 data = s8(m_mem_read_cb(ch->address));
-        ch->address++;
-        ch->remaining_bytes--;
-        if (ch->remaining_bytes == 0) {
-            if (ch->regs[0] & 0x40) {
-                reset_vt03_pcm(ch);
-            } else {
-                ch->enabled = false;
-            }
-        }
-        return data;
+    	int freq = dpcm_clocks[ch->regs[0] & 0x0F];
+		ch->phaseacc -= 4;
+		while (ch->phaseacc < 0)
+		{
+			ch->phaseacc += freq;
+	        u8 data = u8(m_mem_read_cb(ch->address));
+	        logerror("pcm fetch %04x %d\n", ch->address, int(data));
+	        ch->vol = data;
+	        ch->address++;
+	        ch->remaining_bytes--;
+	        if (ch->remaining_bytes == 0) {
+	            if (ch->regs[0] & 0x40) {
+	                reset_vt03_pcm(ch);
+	            } else {
+	                ch->enabled = false;
+	            }
+	        }
+	    }
+        return ch->vol - 128;
     } else {
         return 0;
     }
@@ -137,6 +146,7 @@ void nesapu_vt_device::start_vt3x_pcm(apu_vt_t::vt3x_pcm_t *ch) {
 
 
 void nesapu_vt_device::reset_vt03_pcm(apu_vt_t::vt03_pcm_t *ch) {
+	logerror("reset vt03 pwm\n");
     ch->address = ((~m_apu_vt.extra_regs[0]) & 0x03) << 14 | m_apu_vt.vt03_pcm.regs[2] << 6;
     ch->remaining_bytes = m_apu_vt.vt03_pcm.regs[3] << 4;
     ch->length = m_apu_vt.vt03_pcm.regs[3] << 4;
@@ -151,7 +161,6 @@ void nesapu_vt_device::vt_apu_write(uint8_t address, uint8_t data) {
 		m_xop2->write(0x15, data & 0x0F);
         m_apu_vt.extra_regs[0x05] = data;
     } else if (address >= 0x10 && address <= 0x13) {
-        nesapu_device::write(0x15, data);
         m_apu_vt.vt03_pcm.regs[address - 0x10] = data;
 		if (m_apu_vt.use_vt3x_pcm && address == 0x12) {
 			m_apu_vt.vt33_pcm[m_apu_vt.vt3x_sel_channel].regs[1] = data;
@@ -160,7 +169,6 @@ void nesapu_vt_device::vt_apu_write(uint8_t address, uint8_t data) {
         if (address == 0x30) {
             m_apu_vt.use_vt03_pcm = (data & 0x10) != 0;
 		} else if (address == 0x33) {
-			m_apu_vt.extra_regs[0x33] = data;
 			m_apu_vt.use_vt3x_pcm = (data & 0x80);
 			m_apu_vt.vt33_pcm[0].enabled = (data & 0x10);
 			m_apu_vt.vt33_pcm[1].enabled = (data & 0x08);
@@ -234,6 +242,7 @@ u8 nesapu_vt_device::read(offs_t address)
 
 void nesapu_vt_device::write(offs_t address, u8 value)
 {
+	logerror("nesapu_vt write %04x %02x\n", 0x4000 + address, value);
 	if (address <= 0x0F) {
 		nesapu_device::write(address, value);
 	} else if (address >= 0x10 && address <= 0x13) {
