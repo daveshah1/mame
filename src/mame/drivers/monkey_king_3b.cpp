@@ -220,7 +220,7 @@ uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
 	if (((i++) % 91) == 0 && ((offset * 4) & 0xFFF000) != 0xFFC000)
 		logerror("%s: SDRAM read 0x%06X\n", machine().describe_context(), offset*4);
 	if ((offset * 4) == 0xF03AF0)
-		return 0;
+		return 0; // Why is this needed?
 	return m_sdram[offset];
 }
 
@@ -254,10 +254,10 @@ void mk3b_soc_state::init_rs70()
 		std::swap(ROM[i], ROM[i + (size / 2)]);
 	}
 	// FIXME: Work around missing FPU for now
-	ROM[0x32f24] = 0x00;
-	ROM[0x32f25] = 0x00;
-	ROM[0x32f26] = 0x00;
-	ROM[0x32f27] = 0x00;
+	//ROM[0x32f24] = 0x00;
+	//ROM[0x32f25] = 0x00;
+	//ROM[0x32f26] = 0x00;
+	//ROM[0x32f27] = 0x00;
 }
 
 

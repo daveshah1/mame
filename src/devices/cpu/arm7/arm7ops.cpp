@@ -313,7 +313,16 @@ void arm7_cpu_device::HandleCoProcRT(uint32_t insn)
 		uint32_t res = arm7_rt_r_callback(insn);   // RT Read handler must parse opcode & return appropriate result
 		if (!m_pendingUnd)
 		{
-			SetRegister((insn >> 12) & 0xf, res);
+			uint8_t reg = (insn >> 12) & 0xf;
+			if (reg == 0xf)
+			{
+				// Not PC, but APSR_nzcv
+				set_cpsr((GET_CPSR & ~(N_MASK | Z_MASK | V_MASK | C_MASK)) | (0xf << 28));
+			}
+			else
+			{
+				SetRegister(reg, res);
+			}
 		}
 	}
 	// Store (MCR) data from ARM7 to Co-Proc register
