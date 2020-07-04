@@ -102,9 +102,13 @@ private:
 	uint32_t io10_r(offs_t offset, uint32_t mem_mask = ~0);
 	void io10_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
 
+	uint32_t sdram_r(offs_t offset, uint32_t mem_mask = ~0);
+
 	uint32_t screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 	void map(address_map &map);
 	std::string debug_buf;
+	uint32_t m_ioregs7[16384];
+	int i = 0;
 };
 
 
@@ -118,7 +122,7 @@ void mk3b_soc_state::map(address_map &map)
 	map(0x03000000, 0x0300FFFF).ram().share("iram3");
 
 	// 16MB of external SDRAM
-	map(0x18000000, 0x18FFFFFF).ram().share("sdram");
+	map(0x18000000, 0x18FFFFFF).ram().share("sdram").r(FUNC(mk3b_soc_state::sdram_r));
 	// IO is totally unknown for now
 	map(0x04000000, 0x0400FFFF).rw(FUNC(mk3b_soc_state::io4_r), FUNC(mk3b_soc_state::io4_w));
 	map(0x07000000, 0x0700FFFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
@@ -182,17 +186,20 @@ void mk3b_soc_state::io4_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 {
 	switch (offset) {
-		case 0x21: // video size
-			return (1280 << 16) | (720);
+		/*case 0x21: // video size
+			return (1280 << 16) | (720);*/
+		case 0x12:
+			return m_screen->vblank() ? 0xFF : 0x00;
 		default:
 			logerror("%s: IO 0x07 read 0x%04X\n", machine().describe_context(), offset);
-			return 0x00;
+			return m_ioregs7[offset];
 	}
 }
 
 void mk3b_soc_state::io7_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 {
 	logerror("%s: IO 0x07 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
+	m_ioregs7[offset] = (m_ioregs7[offset] & ~mem_mask) | (data & mem_mask);
 }
 
 uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
@@ -207,6 +214,16 @@ uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
 			return 0x00;
 	}
 }
+
+uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
+{
+	if (((i++) % 91) == 0 && ((offset * 4) & 0xFFF000) != 0xFFC000)
+		logerror("%s: SDRAM read 0x%06X\n", machine().describe_context(), offset*4);
+	if ((offset * 4) == 0xF03AF0)
+		return 0;
+	return m_sdram[offset];
+}
+
 
 void mk3b_soc_state::io10_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 {
