@@ -77,6 +77,7 @@ public:
 		m_iram0(*this, "iram0"),
 		m_iram3(*this, "iram3"),
 		m_iram5(*this, "iram5"),
+		m_vram(*this, "vram"),
 		m_sdram(*this, "sdram"),
 		m_maincpu(*this, "maincpu"),
 		m_screen(*this, "screen"),
@@ -89,6 +90,7 @@ public:
 
 private:
 	required_shared_ptr<uint32_t> m_iram0, m_iram3, m_iram5;
+	required_shared_ptr<uint32_t> m_vram;
 	required_shared_ptr<uint32_t> m_sdram;
 	required_device<cpu_device> m_maincpu;
 	required_device<screen_device> m_screen;
@@ -132,8 +134,8 @@ void mk3b_soc_state::map(address_map &map)
 	// unknown amount and configuration of internal RAM
 	map(0x00000000, 0x0000FFFF).ram().share("iram0");
 	// This section of RAM seems to contain the stack
-	map(0x03000000, 0x0300FFFF).ram().share("iram3");
-	map(0x03FF0000, 0x03FFFFFF).ram().share("iram3");
+	map(0x03000000, 0x03007FFF).ram().share("iram3");
+	map(0x03FF8000, 0x03FFFFFF).ram().share("iram3");
 	// unknown if this is RAM or IO
 	map(0x05000000, 0x0500FFFF).ram().share("iram5");
 
@@ -143,7 +145,7 @@ void mk3b_soc_state::map(address_map &map)
 	// 0x04... seems to be timer and IRQ stuff
 	map(0x04000000, 0x0400FFFF).rw(FUNC(mk3b_soc_state::io4_r), FUNC(mk3b_soc_state::io4_w));
 	// 0x06... let's assume this aliases to the main framebuffer for now
-	map(0x06000000, 0x067FFFFF).rw(FUNC(mk3b_soc_state::io6_r), FUNC(mk3b_soc_state::io6_w));
+	map(0x06000000, 0x063FFFFF).ram().share("vram");
 	// 0x07... seems to be a mix of video-related IO and SRAM
 	map(0x07000000, 0x0700FFFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
 	// 0x10... seems to be misc IO
@@ -306,7 +308,7 @@ uint32_t mk3b_soc_state::io4_r(offs_t offset, uint32_t mem_mask)
 	switch (offset) {
 		case 0x00:
 			logerror("%s: IO 0x04 read 0x00\n", machine().describe_context());
-			return 0x55;
+			return 0xFF;
 		case 0x01:
 			return (m_screen->vblank() << 27) | m_screen->vblank(); // who knows? seems to need to toggle between 0 and 1
 		case 0x80: // some kind of IRQ pending
@@ -359,7 +361,7 @@ void mk3b_soc_state::device_timer(emu_timer &timer, device_timer_id id, int para
 {
 	switch (id) {
 	case 0:
-		m_maincpu->set_input_line(ARM7_IRQ_LINE, ASSERT_LINE);
+		//m_maincpu->set_input_line(ARM7_IRQ_LINE, ASSERT_LINE);
 		break;
 	}
 }
@@ -383,10 +385,10 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 			return (m_ioregs7[offset] & 0xFFFF0000) | ((m_ioregs7[offset] & 0x00007FFF) * 2);
 		case 0x12:
 			return m_screen->vblank() ? 0xFF : 0x00;
-		case 0x1E:
+		//case 0x1E:
 			//logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
 			//return m_screen->vblank() ? 0x01 : 0x00;
-			return m_io_p1->read();
+			//return m_io_p1->read();
 		case 0x00:
 		case 0x01:
 			//logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
@@ -400,8 +402,12 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 
 void mk3b_soc_state::io7_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 {
+	//if (offset == 0x00 || offset == 0x01)
+	//	logerror("%s: IO 0x07 write 0x%04X %08X&%08X\n", machine().describe_context(), offset, data, mem_mask);
 	//logerror("%s: IO 0x07 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
 	m_ioregs7[offset] = (m_ioregs7[offset] & ~mem_mask) | (data & mem_mask);
+	//if ((data & 0xFF000000) == 0x06000000 || (data & 0xFFF00000) == 0x18800000)
+	//	logerror("%s: possible VRAM set %04x %08x\n", machine().describe_context(), offset, data);
 }
 
 uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
@@ -410,9 +416,11 @@ uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
 		// Definitely not correct, but toggling somehow keeps things moving
 		case 0x008:
 			return 0xFFFFFFFF;
+		case 0x041:
+			return 0xFFFFFFFF;
 		case 0x148:
 		case 0x149:
-			logerror("%s: read %08x %08x\n", machine().describe_context(), offset, mem_mask);
+			//logerror("%s: read %08x %08x\n", machine().describe_context(), offset, mem_mask);
 			return m_screen->vblank() ? 0x00000000 : 0xFFFFFFFF;
 		default:
 			logerror("%s: IO 0x10 read 0x%04X\n", machine().describe_context(), offset);
@@ -426,8 +434,10 @@ uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
 	if (((i++) % 91) == 0 && ((offset * 4) & 0xFFF000) != 0xFFC000)
 		logerror("%s: SDRAM read 0x%06X\n", machine().describe_context(), offset*4);
 	*/
-	if ((offset * 4) == 0xF03AF0)
+	if ((offset * 4) == 0xF03AF0) {
+		logerror("%s: intercepted\n", machine().describe_context());
 		return 0; // Why is this needed?
+	}
 	return m_sdram[offset];
 }
 
