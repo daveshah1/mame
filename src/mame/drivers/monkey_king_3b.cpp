@@ -93,6 +93,8 @@ private:
 
 	virtual void machine_reset() override;
 	virtual void video_start() override;
+	virtual void device_start() override;
+
 	uint32_t io4_r(offs_t offset, uint32_t mem_mask = ~0);
 	void io4_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
 
@@ -109,6 +111,11 @@ private:
 	std::string debug_buf;
 	uint32_t m_ioregs7[16384];
 	int i = 0;
+	uint32_t m_timer_time = 0;
+	bool m_timer_enabled = false;
+
+	emu_timer *m_sys_timer;
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr) override;
 };
 
 
@@ -120,6 +127,7 @@ void mk3b_soc_state::map(address_map &map)
 	map(0x00000000, 0x0000FFFF).ram().share("iram0");
 	// This section of RAM seems to contain the stack
 	map(0x03000000, 0x0300FFFF).ram().share("iram3");
+	map(0x03FF0000, 0x03FFFFFF).ram().share("iram3");
 
 	// 16MB of external SDRAM
 	map(0x18000000, 0x18FFFFFF).ram().share("sdram").r(FUNC(mk3b_soc_state::sdram_r));
@@ -144,6 +152,16 @@ void mk3b_soc_state::machine_reset()
 	m_iram0[0] = 0xe59f0000; // ldr r0, [pc]
 	m_iram0[1] = 0xe12fff10; // bx, r0
 	m_iram0[2] = 0x08000000; // target address
+
+	m_timer_time = 0;
+	m_timer_enabled = false;
+}
+
+void mk3b_soc_state::device_start()
+{
+	driver_device::device_start();
+	m_sys_timer = timer_alloc(0);
+	m_sys_timer->adjust(attotime::never);	
 }
 
 uint32_t mk3b_soc_state::screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
@@ -177,8 +195,15 @@ void mk3b_soc_state::mk3b_soc(machine_config &config)
 uint32_t mk3b_soc_state::io4_r(offs_t offset, uint32_t mem_mask)
 {
 	switch (offset) {
+		case 0x00:
+			logerror("%s: IO 0x04 read 0x00\n", machine().describe_context());
+			return 0xFF;
 		case 0x01:
 			return (m_screen->vblank() << 27) | m_screen->vblank(); // who knows? seems to need to toggle between 0 and 1
+		case 0x80:
+			return 0x00000000;
+		case 0x82:
+			return 0x04000000;
 		default:
 			logerror("%s: IO 0x04 read 0x%04X\n", machine().describe_context(), offset);
 			return 0x00;
@@ -187,9 +212,48 @@ uint32_t mk3b_soc_state::io4_r(offs_t offset, uint32_t mem_mask)
 
 void mk3b_soc_state::io4_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 {
-	logerror("%s: IO 0x04 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
+	switch (offset) {
+		case 0x41:
+			logerror("%s: set timer0 %08x %08x\n", machine().describe_context(), data, mem_mask);
+			if (mem_mask & 0xFFFF)
+				m_timer_time = data & 0xFFFF;
+			if (mem_mask & 0x00FF0000) {
+				if (data & 0x00800000) {
+					logerror("%s: enable timer0\n", machine().describe_context());
+					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000000));
+					m_timer_enabled = true;
+				} else {
+					logerror("%s: disable timer0\n", machine().describe_context());
+					m_sys_timer->adjust(attotime::never);
+					m_timer_enabled = false;
+				}
+			}
+			break;
+		case 0x80:
+			break;
+		case 0x82:
+			//logerror("%s: timer0 ctl %08x & %08x\n", machine().describe_context(), data, mem_mask);
+			if (data & 0x04000000) {
+				m_maincpu->set_input_line(ARM7_IRQ_LINE, CLEAR_LINE);
+				if (m_timer_enabled)
+					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000000));
+			}
+			break;
+		default:
+			logerror("%s: IO 0x04 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
+			break;
+	}
 }
 
+
+void mk3b_soc_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id) {
+	case 0:
+		m_maincpu->set_input_line(ARM7_IRQ_LINE, ASSERT_LINE);
+		break;
+	}
+}
 
 uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 {
@@ -198,8 +262,9 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 			return (1280 << 16) | (720);*/
 		case 0x12:
 			return m_screen->vblank() ? 0xFF : 0x00;
+		case 0x1E:
+			return m_screen->vblank() ? 0x01 : 0x00;
 		default:
-			//logerror("%s: IO 0x07 read 0x%04X\n", machine().describe_context(), offset);
 			return m_ioregs7[offset];
 	}
 }
