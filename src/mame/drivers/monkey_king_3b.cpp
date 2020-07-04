@@ -148,6 +148,14 @@ void mk3b_soc_state::machine_reset()
 
 uint32_t mk3b_soc_state::screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
+	const uint32_t base = 0x00800000 / 4;
+	const int width = (m_ioregs7[0x21] >> 16), height = (m_ioregs7[0x21] & 0xFFFF);
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint16_t rgb16 = m_sdram[base + (y * width + x) / 2] >> ((x % 1) ? 16 : 0);
+			bitmap.pix32(y, x) = ((rgb16 & 0x1F) << 19) | (((rgb16 & 0x07E0) >> 5) << 10) | ((rgb16 >> 11) << 3);
+		}
+	}
 	return 0;
 }
 
@@ -161,8 +169,8 @@ void mk3b_soc_state::mk3b_soc(machine_config &config)
 	SCREEN(config, m_screen, SCREEN_TYPE_RASTER);
 	m_screen->set_refresh_hz(60);
 	m_screen->set_vblank_time(ATTOSECONDS_IN_USEC(2500) /* not accurate */);
-	m_screen->set_size(1280, 720);
-	m_screen->set_visarea(0, 1280-1, 0, 720-1);
+	m_screen->set_size(1920, 1080);
+	m_screen->set_visarea(0, 1920-1, 0, 1080-1);
 	m_screen->set_screen_update(FUNC(mk3b_soc_state::screen_update_mk3b_soc));
 }
 
@@ -191,14 +199,14 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 		case 0x12:
 			return m_screen->vblank() ? 0xFF : 0x00;
 		default:
-			logerror("%s: IO 0x07 read 0x%04X\n", machine().describe_context(), offset);
+			//logerror("%s: IO 0x07 read 0x%04X\n", machine().describe_context(), offset);
 			return m_ioregs7[offset];
 	}
 }
 
 void mk3b_soc_state::io7_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 {
-	logerror("%s: IO 0x07 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
+	//logerror("%s: IO 0x07 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
 	m_ioregs7[offset] = (m_ioregs7[offset] & ~mem_mask) | (data & mem_mask);
 }
 
@@ -217,8 +225,10 @@ uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
 
 uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
 {
+	/*
 	if (((i++) % 91) == 0 && ((offset * 4) & 0xFFF000) != 0xFFC000)
 		logerror("%s: SDRAM read 0x%06X\n", machine().describe_context(), offset*4);
+	*/
 	if ((offset * 4) == 0xF03AF0)
 		return 0; // Why is this needed?
 	return m_sdram[offset];
