@@ -76,9 +76,11 @@ public:
 		: driver_device(mconfig, type, tag),
 		m_iram0(*this, "iram0"),
 		m_iram3(*this, "iram3"),
+		m_iram5(*this, "iram5"),
 		m_sdram(*this, "sdram"),
 		m_maincpu(*this, "maincpu"),
-		m_screen(*this, "screen")
+		m_screen(*this, "screen"),
+		m_io_p1(*this, "IN0")
 	{ }
 
 	void mk3b_soc(machine_config &config);
@@ -86,10 +88,11 @@ public:
 	void init_rs70();
 
 private:
-	required_shared_ptr<uint32_t> m_iram0, m_iram3;
+	required_shared_ptr<uint32_t> m_iram0, m_iram3, m_iram5;
 	required_shared_ptr<uint32_t> m_sdram;
 	required_device<cpu_device> m_maincpu;
 	required_device<screen_device> m_screen;
+	required_ioport m_io_p1;
 
 	virtual void machine_reset() override;
 	virtual void video_start() override;
@@ -97,6 +100,9 @@ private:
 
 	uint32_t io4_r(offs_t offset, uint32_t mem_mask = ~0);
 	void io4_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
+
+	uint32_t io6_r(offs_t offset, uint32_t mem_mask = ~0);
+	void io6_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
 
 	uint32_t io7_r(offs_t offset, uint32_t mem_mask = ~0);
 	void io7_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
@@ -128,17 +134,120 @@ void mk3b_soc_state::map(address_map &map)
 	// This section of RAM seems to contain the stack
 	map(0x03000000, 0x0300FFFF).ram().share("iram3");
 	map(0x03FF0000, 0x03FFFFFF).ram().share("iram3");
+	// unknown if this is RAM or IO
+	map(0x05000000, 0x0500FFFF).ram().share("iram5");
 
 	// 16MB of external SDRAM
 	map(0x18000000, 0x18FFFFFF).ram().share("sdram").r(FUNC(mk3b_soc_state::sdram_r));
 	// IO is totally unknown for now
+	// 0x04... seems to be timer and IRQ stuff
 	map(0x04000000, 0x0400FFFF).rw(FUNC(mk3b_soc_state::io4_r), FUNC(mk3b_soc_state::io4_w));
+	// 0x06... let's assume this aliases to the main framebuffer for now
+	map(0x06000000, 0x067FFFFF).rw(FUNC(mk3b_soc_state::io6_r), FUNC(mk3b_soc_state::io6_w));
+	// 0x07... seems to be a mix of video-related IO and SRAM
 	map(0x07000000, 0x0700FFFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
+	// 0x10... seems to be misc IO
 	map(0x10000000, 0x1000FFFF).rw(FUNC(mk3b_soc_state::io10_r), FUNC(mk3b_soc_state::io10_w));
 }
 
 static INPUT_PORTS_START( mk3b_soc )
-
+	PORT_START("IN0")
+	PORT_DIPNAME( 0x00000001, 0x00000000, "B0" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000002, 0x00000000, "B1" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000004, 0x00000000, "B2" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000008, 0x00000000, "B3" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000010, 0x00000000, "B4" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000020, 0x00000000, "B5" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000020, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000040, 0x00000000, "B6" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000040, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000080, 0x00000000, "B7" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000080, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000100, 0x00000000, "B8" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000200, 0x00000000, "B9" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000400, 0x00000000, "B10" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00000800, 0x00000000, "B11" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00000800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00001000, 0x00000000, "B12" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00001000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00002000, 0x00000000, "B13" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00002000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00004000, 0x00000000, "B14" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00004000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00008000, 0x00000000, "B15" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00008000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00010000, 0x00000000, "B16" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00010000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00020000, 0x00000000, "B17" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00020000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00040000, 0x00000000, "B18" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00040000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00080000, 0x00000000, "B19" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00080000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00100000, 0x00000000, "B20" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00100000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00200000, 0x00000000, "B21" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00200000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00400000, 0x00000000, "B22" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00400000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00800000, 0x00000000, "B23" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00800000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x01000000, 0x00000000, "B24" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x01000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02000000, 0x00000000, "B25" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x02000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04000000, 0x00000000, "B26" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x04000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08000000, 0x00000000, "B27" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x08000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10000000, 0x00000000, "B28" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x10000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20000000, 0x00000000, "B29" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x20000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40000000, 0x00000000, "B30" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x40000000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80000000, 0x00000000, "B31" )
+	PORT_DIPSETTING( 0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x80000000, DEF_STR( On ) )
 INPUT_PORTS_END
 
 void mk3b_soc_state::video_start()
@@ -167,7 +276,7 @@ void mk3b_soc_state::device_start()
 uint32_t mk3b_soc_state::screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	const uint32_t base = 0x00800000 / 4;
-	const int width = (m_ioregs7[0x21] >> 16), height = (m_ioregs7[0x21] & 0xFFFF);
+	const int width = (m_ioregs7[0x21] >> 16), height = 2*(m_ioregs7[0x21] & 0xFFFF);
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			uint16_t rgb16 = m_sdram[base + (y * width + x) / 2] >> ((x % 1) ? 16 : 0);
@@ -197,11 +306,11 @@ uint32_t mk3b_soc_state::io4_r(offs_t offset, uint32_t mem_mask)
 	switch (offset) {
 		case 0x00:
 			logerror("%s: IO 0x04 read 0x00\n", machine().describe_context());
-			return 0xFF;
+			return 0x55;
 		case 0x01:
 			return (m_screen->vblank() << 27) | m_screen->vblank(); // who knows? seems to need to toggle between 0 and 1
-		case 0x80:
-			return 0x00000000;
+		case 0x80: // some kind of IRQ pending
+			return 0x44444444;
 		case 0x82:
 			return 0x04000000;
 		default:
@@ -220,7 +329,7 @@ void mk3b_soc_state::io4_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 			if (mem_mask & 0x00FF0000) {
 				if (data & 0x00800000) {
 					logerror("%s: enable timer0\n", machine().describe_context());
-					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000000));
+					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000));
 					m_timer_enabled = true;
 				} else {
 					logerror("%s: disable timer0\n", machine().describe_context());
@@ -236,7 +345,7 @@ void mk3b_soc_state::io4_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 			if (data & 0x04000000) {
 				m_maincpu->set_input_line(ARM7_IRQ_LINE, CLEAR_LINE);
 				if (m_timer_enabled)
-					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000000));
+					m_sys_timer->adjust(attotime::from_ticks(m_timer_time, 240000));
 			}
 			break;
 		default:
@@ -255,16 +364,36 @@ void mk3b_soc_state::device_timer(emu_timer &timer, device_timer_id id, int para
 	}
 }
 
+uint32_t mk3b_soc_state::io6_r(offs_t offset, uint32_t mem_mask)
+{
+	return m_sdram[offset + (0x00800000 / 4)];
+}
+
+void mk3b_soc_state::io6_w(offs_t offset, uint32_t data, uint32_t mem_mask)
+{
+	m_sdram[offset + (0x00800000 / 4)] = (m_sdram[offset + (0x00800000 / 4)] & ~mem_mask) |
+		(data & mem_mask);
+}
+
 uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 {
 	switch (offset) {
-		/*case 0x21: // video size
-			return (1280 << 16) | (720);*/
+		case 0x21: // video size
+			// Without the *2 the image is cut off
+			return (m_ioregs7[offset] & 0xFFFF0000) | ((m_ioregs7[offset] & 0x00007FFF) * 2);
 		case 0x12:
 			return m_screen->vblank() ? 0xFF : 0x00;
 		case 0x1E:
-			return m_screen->vblank() ? 0x01 : 0x00;
+			//logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
+			//return m_screen->vblank() ? 0x01 : 0x00;
+			return m_io_p1->read();
+		case 0x00:
+		case 0x01:
+			//logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
+			return m_io_p1->read();
 		default:
+			if (offset < 0x10)
+				logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
 			return m_ioregs7[offset];
 	}
 }
@@ -279,8 +408,11 @@ uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
 {
 	switch (offset) {
 		// Definitely not correct, but toggling somehow keeps things moving
+		case 0x008:
+			return 0xFFFFFFFF;
 		case 0x148:
 		case 0x149:
+			logerror("%s: read %08x %08x\n", machine().describe_context(), offset, mem_mask);
 			return m_screen->vblank() ? 0x00000000 : 0xFFFFFFFF;
 		default:
 			logerror("%s: IO 0x10 read 0x%04X\n", machine().describe_context(), offset);
