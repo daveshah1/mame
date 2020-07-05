@@ -76,9 +76,12 @@ public:
 		: driver_device(mconfig, type, tag),
 		m_iram0(*this, "iram0"),
 		m_iram3(*this, "iram3"),
-		m_iram5(*this, "iram5"),
+		//m_iram5(*this, "iram5"),
+		m_iram1001(*this, "iram1001"),
+		m_iram11(*this, "iram11"),
 		m_vram(*this, "vram"),
 		m_sdram(*this, "sdram"),
+		m_norflash(*this, "norflash"),
 		m_maincpu(*this, "maincpu"),
 		m_screen(*this, "screen"),
 		m_io_p1(*this, "IN0")
@@ -89,9 +92,10 @@ public:
 	void init_rs70();
 
 private:
-	required_shared_ptr<uint32_t> m_iram0, m_iram3, m_iram5;
+	required_shared_ptr<uint32_t> m_iram0, m_iram3, /*m_iram5,*/ m_iram1001, m_iram11;
 	required_shared_ptr<uint32_t> m_vram;
 	required_shared_ptr<uint32_t> m_sdram;
+	required_region_ptr<uint32_t> m_norflash;
 	required_device<cpu_device> m_maincpu;
 	required_device<screen_device> m_screen;
 	required_ioport m_io_p1;
@@ -113,6 +117,8 @@ private:
 	void io10_w(offs_t offset, uint32_t data, uint32_t mem_mask = ~0);
 
 	uint32_t sdram_r(offs_t offset, uint32_t mem_mask = ~0);
+	uint32_t io11_r(offs_t offset, uint32_t mem_mask = ~0);
+	uint32_t norflash_r(offs_t offset, uint32_t mem_mask = ~0);
 
 	uint32_t screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 	void map(address_map &map);
@@ -121,6 +127,7 @@ private:
 	int i = 0;
 	uint32_t m_timer_time = 0;
 	bool m_timer_enabled = false;
+	bool m_nor_hi = true;
 
 	emu_timer *m_sys_timer;
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr) override;
@@ -130,14 +137,16 @@ private:
 void mk3b_soc_state::map(address_map &map)
 {
 	// 64MB external NOR flash
-	map(0x08000000, 0x0BFFFFFF).rom().share("norflash").region("norflash", 0x0);;
+	map(0x08000000, 0x0BFFFFFF).rom().r(FUNC(mk3b_soc_state::norflash_r));
 	// unknown amount and configuration of internal RAM
 	map(0x00000000, 0x0000FFFF).ram().share("iram0");
 	// This section of RAM seems to contain the stack
-	map(0x03000000, 0x03007FFF).ram().share("iram3");
+	map(0x03000000, 0x03001FFF).ram().share("iram3");
 	map(0x03FF8000, 0x03FFFFFF).ram().share("iram3");
-	// unknown if this is RAM or IO
-	map(0x05000000, 0x0500FFFF).ram().share("iram5");
+	// unknown if these are RAM or IO
+	//Smap(0x05000000, 0x0500FFFF).ram().share("iram5");
+	map(0x10014000, 0x10014FFF).ram().share("iram1001");
+	map(0x11000800, 0x110008FF).ram().share("iram11").r(FUNC(mk3b_soc_state::io11_r));
 
 	// 16MB of external SDRAM
 	map(0x18000000, 0x18FFFFFF).ram().share("sdram").r(FUNC(mk3b_soc_state::sdram_r));
@@ -147,7 +156,7 @@ void mk3b_soc_state::map(address_map &map)
 	// 0x06... let's assume this aliases to the main framebuffer for now
 	map(0x06000000, 0x063FFFFF).ram().share("vram");
 	// 0x07... seems to be a mix of video-related IO and SRAM
-	map(0x07000000, 0x0700FFFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
+	map(0x07000000, 0x07001FFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
 	// 0x10... seems to be misc IO
 	map(0x10000000, 0x1000FFFF).rw(FUNC(mk3b_soc_state::io10_r), FUNC(mk3b_soc_state::io10_w));
 }
@@ -266,6 +275,7 @@ void mk3b_soc_state::machine_reset()
 
 	m_timer_time = 0;
 	m_timer_enabled = false;
+	m_nor_hi = true;
 }
 
 void mk3b_soc_state::device_start()
@@ -396,7 +406,7 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 		default:
 			if (offset < 0x10)
 				logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
-			return m_ioregs7[offset];
+			return m_ioregs7[offset] & mem_mask;
 	}
 }
 
@@ -428,6 +438,16 @@ uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
 	}
 }
 
+uint32_t mk3b_soc_state::io11_r(offs_t offset, uint32_t mem_mask)
+{
+	switch (offset) {
+		case 0x3:
+			return 0x0;
+		default:
+			return m_iram11[offset] & mem_mask;
+	}
+}
+
 uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
 {
 	/*
@@ -438,7 +458,15 @@ uint32_t mk3b_soc_state::sdram_r(offs_t offset, uint32_t mem_mask)
 		logerror("%s: intercepted\n", machine().describe_context());
 		return 0; // Why is this needed?
 	}
-	return m_sdram[offset];
+	return m_sdram[offset] & mem_mask;
+}
+
+
+uint32_t mk3b_soc_state::norflash_r(offs_t offset, uint32_t mem_mask)
+{
+	if (m_nor_hi)
+		offset |= (1 << 23);
+	return m_norflash[offset] & mem_mask;
 }
 
 
@@ -456,6 +484,10 @@ void mk3b_soc_state::io10_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 			}
 			break;
 		}
+		case 0x41:
+			if (mem_mask & 0xFF000000)
+				m_nor_hi = (data & 0x01000000) != 0;
+			break;
 		default:
 			logerror("%s: IO 0x10 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
 	}
@@ -463,24 +495,13 @@ void mk3b_soc_state::io10_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 
 void mk3b_soc_state::init_rs70()
 {
-	// Uppermost address bit seems to be inverted
-	uint8_t *ROM = memregion("norflash")->base();
-	int size = memregion("norflash")->bytes();
 
-	for (int i = 0; i < (size / 2); i++) {
-		std::swap(ROM[i], ROM[i + (size / 2)]);
-	}
-	// FIXME: Work around missing FPU for now
-	//ROM[0x32f24] = 0x00;
-	//ROM[0x32f25] = 0x00;
-	//ROM[0x32f26] = 0x00;
-	//ROM[0x32f27] = 0x00;
 }
 
 
 ROM_START( rs70_648 )
-	ROM_REGION(0x04000000, "norflash", 0)
-	ROM_LOAD("s29gl512p.bin", 0x000000, 0x04000000, CRC(cb452bd7) SHA1(0b19a13a3d0b829725c10d64d7ff852ff5202ed0) )
+	ROM_REGION32_LE(0x04000000, "norflash", 0)
+	ROM_LOAD32_DWORD("s29gl512p.bin", 0x000000, 0x04000000, CRC(cb452bd7) SHA1(0b19a13a3d0b829725c10d64d7ff852ff5202ed0) )
 ROM_END
 
 CONS( 2019, rs70_648,  0,        0, mk3b_soc, mk3b_soc, mk3b_soc_state, init_rs70, "<unknown>", "RS-70 648-in-1",      MACHINE_IS_SKELETON )
