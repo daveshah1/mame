@@ -79,7 +79,7 @@ public:
 		//m_iram5(*this, "iram5"),
 		m_iram1001(*this, "iram1001"),
 		m_iram11(*this, "iram11"),
-		m_vram(*this, "vram"),
+		//m_vram(*this, "vram"),
 		m_sdram(*this, "sdram"),
 		m_norflash(*this, "norflash"),
 		m_maincpu(*this, "maincpu"),
@@ -93,7 +93,7 @@ public:
 
 private:
 	required_shared_ptr<uint32_t> m_iram0, m_iram3, /*m_iram5,*/ m_iram1001, m_iram11;
-	required_shared_ptr<uint32_t> m_vram;
+	//required_shared_ptr<uint32_t> m_vram;
 	required_shared_ptr<uint32_t> m_sdram;
 	required_region_ptr<uint32_t> m_norflash;
 	required_device<cpu_device> m_maincpu;
@@ -154,7 +154,8 @@ void mk3b_soc_state::map(address_map &map)
 	// 0x04... seems to be timer and IRQ stuff
 	map(0x04000000, 0x0400FFFF).rw(FUNC(mk3b_soc_state::io4_r), FUNC(mk3b_soc_state::io4_w));
 	// 0x06... let's assume this aliases to the main framebuffer for now
-	map(0x06000000, 0x063FFFFF).ram().share("vram");
+	//map(0x06000000, 0x063FFFFF).ram().share("vram");
+	map(0x06000000, 0x063FFFFF).rw(FUNC(mk3b_soc_state::io6_r), FUNC(mk3b_soc_state::io6_w));
 	// 0x07... seems to be a mix of video-related IO and SRAM
 	map(0x07000000, 0x07001FFF).rw(FUNC(mk3b_soc_state::io7_r), FUNC(mk3b_soc_state::io7_w));
 	// 0x10... seems to be misc IO
@@ -288,7 +289,9 @@ void mk3b_soc_state::device_start()
 uint32_t mk3b_soc_state::screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	const uint32_t base = 0x00800000 / 4;
-	const int width = (m_ioregs7[0x21] >> 16), height = 2*(m_ioregs7[0x21] & 0xFFFF);
+	int width = (m_ioregs7[0x21] >> 16), /*height = 2*(m_ioregs7[0x21] & 0xFFFF)*/ height=1080;
+	if (width == 0)
+		width = 160;
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			uint16_t rgb16 = m_sdram[base + (y * width + x) / 2] >> ((x % 1) ? 16 : 0);
@@ -371,7 +374,7 @@ void mk3b_soc_state::device_timer(emu_timer &timer, device_timer_id id, int para
 {
 	switch (id) {
 	case 0:
-		//m_maincpu->set_input_line(ARM7_IRQ_LINE, ASSERT_LINE);
+		m_maincpu->set_input_line(ARM7_IRQ_LINE, ASSERT_LINE);
 		break;
 	}
 }
@@ -403,9 +406,19 @@ uint32_t mk3b_soc_state::io7_r(offs_t offset, uint32_t mem_mask)
 		case 0x01:
 			//logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
 			return m_io_p1->read();
+		case 0x196:
+			return 0x00000001;
+		case 0x18A:
+			return 0x00000000;
+		case 0x178:
+			return 0x0000FFFF;
+		case 0x179:
+			return 0x00000000;
+		case 0x192:
+			return 0x00000001;
 		default:
-			if (offset < 0x10)
-				logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
+			//if (offset < 0x10)
+			//	logerror("%s: IO 0x07 read 0x%04X %08X\n", machine().describe_context(), offset, mem_mask);
 			return m_ioregs7[offset] & mem_mask;
 	}
 }
