@@ -288,14 +288,29 @@ void mk3b_soc_state::device_start()
 
 uint32_t mk3b_soc_state::screen_update_mk3b_soc(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	const uint32_t base = 0x00800000 / 4;
-	int width = (m_ioregs7[0x21] >> 16), /*height = 2*(m_ioregs7[0x21] & 0xFFFF)*/ height=1080;
+	const uint32_t base = (0x00800000 + (m_ioregs7[0x1F] & 0x000FFFFF)) / 4;
+
+	int width = (m_ioregs7[0x21] >> 16), height = 2*(m_ioregs7[0x21] & 0xFFFF);
 	if (width == 0)
-		width = 160;
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			uint16_t rgb16 = m_sdram[base + (y * width + x) / 2] >> ((x % 1) ? 16 : 0);
-			bitmap.pix32(y, x) = ((rgb16 & 0x1F) << 19) | (((rgb16 & 0x07E0) >> 5) << 10) | ((rgb16 >> 11) << 3);
+		width = 320;
+	if (height == 0)
+		height = 240;
+	const int scr_width = 1920;
+	const int scr_height = 1080;
+
+	// FIXME: work out how the MK3B actually does hardware scaling
+	int scale = std::min(scr_width / width, scr_height / height);
+
+	for (int sy = cliprect.min_y; sy < cliprect.max_y; sy++) {
+		for (int sx = cliprect.min_x; sx < cliprect.max_x; sx++) {
+			int y = sy / scale;
+			int x = sx / scale;
+			if (y >= height || x >= width) {
+				bitmap.pix32(sy, sx) = 0;
+			} else {
+				uint16_t rgb16 = m_sdram[base + (y * width + x) / 2] >> ((x % 1) ? 16 : 0);
+				bitmap.pix32(sy, sx) = ((rgb16 & 0x1F) << 19) | (((rgb16 & 0x07E0) >> 5) << 10) | ((rgb16 >> 11) << 3);
+			}
 		}
 	}
 	return 0;
@@ -429,8 +444,8 @@ void mk3b_soc_state::io7_w(offs_t offset, uint32_t data, uint32_t mem_mask)
 	//	logerror("%s: IO 0x07 write 0x%04X %08X&%08X\n", machine().describe_context(), offset, data, mem_mask);
 	//logerror("%s: IO 0x07 write 0x%04X 0x%08X & 0x%08X\n", machine().describe_context(), offset, data, mem_mask);
 	m_ioregs7[offset] = (m_ioregs7[offset] & ~mem_mask) | (data & mem_mask);
-	//if ((data & 0xFF000000) == 0x06000000 || (data & 0xFFF00000) == 0x18800000)
-	//	logerror("%s: possible VRAM set %04x %08x\n", machine().describe_context(), offset, data);
+	if ((data & 0xFF000000) == 0x06000000 || (data & 0xFFF00000) == 0x18800000)
+		logerror("%s: possible VRAM set %04x %08x\n", machine().describe_context(), offset, data);
 }
 
 uint32_t mk3b_soc_state::io10_r(offs_t offset, uint32_t mem_mask)
